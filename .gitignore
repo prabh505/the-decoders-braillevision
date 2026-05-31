@@ -1,0 +1,34 @@
+# Datasets (too large for GitHub)
+datasets/
+braille_merged/
+braille_merged.zip
+archive.zip
+archive (1).zip
+
+# Virtual environment
+venv/
+
+# Model weights (large binary files)
+model/best.pt
+model/best_A.pt
+model/best_B.pt
+model/dotneural_pretrained.pt
+*.tflite
+
+# Kaggle outputs
+kaggle_output_A/
+kaggle_output_B/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Ultralytics runs
+runs/
+braille_merged 2.zip
