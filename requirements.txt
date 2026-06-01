@@ -17,3 +17,4 @@ pyttsx3>=2.90 ; sys_platform != "darwin"
 # roboflow>=1.1.0
 
 # Tip: once everything runs, lock exact versions with:  pip freeze > requirements.txt
+flask

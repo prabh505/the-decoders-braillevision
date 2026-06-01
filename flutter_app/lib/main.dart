@@ -1,8 +1,14 @@
-// BrailleVision -- app entry point. Place in lib/ alongside braille_screen.dart.
 import 'package:flutter/material.dart';
-import 'braille_screen.dart';
+import 'package:camera/camera.dart';
+import 'braille_camera_screen.dart';
 
-void main() => runApp(const BrailleVisionApp());
+late List<CameraDescription> cameras;
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  cameras = await availableCameras();
+  runApp(const BrailleVisionApp());
+}
 
 class BrailleVisionApp extends StatelessWidget {
   const BrailleVisionApp({super.key});
@@ -12,8 +18,12 @@ class BrailleVisionApp extends StatelessWidget {
     return MaterialApp(
       title: 'BrailleVision',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
-      home: const BrailleScreen(),
+      theme: ThemeData(
+        colorSchemeSeed: Colors.indigo,
+        useMaterial3: true,
+        brightness: Brightness.dark,
+      ),
+      home: const BrailleCameraScreen(),
     );
   }
 }
