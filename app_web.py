@@ -75,19 +75,19 @@ def detect_and_annotate(img_rgb, conf=0.35, use_tta=True):
     return annotated, reading_order(dets)
 
 
-def process_upload(img_rgb, conf):
+def process_upload(img_rgb):
     """Process a single uploaded image — uses TTA for best accuracy."""
     if img_rgb is None:
         return None, ""
-    annotated, text = detect_and_annotate(img_rgb, conf, use_tta=True)
+    annotated, text = detect_and_annotate(img_rgb, 0.35, use_tta=True)
     return annotated, text
 
 
-def process_webcam(frame_rgb, conf):
+def process_webcam(frame_rgb):
     """Process a webcam frame — skips TTA for speed, uses temporal smoothing."""
     if frame_rgb is None:
         return None, ""
-    annotated, text = detect_and_annotate(frame_rgb, conf, use_tta=False)
+    annotated, text = detect_and_annotate(frame_rgb, 0.35, use_tta=False)
     _hist.append(text)
     stable = Counter(_hist).most_common(1)[0][0] if _hist else ""
     return annotated, stable
@@ -120,7 +120,6 @@ with gr.Blocks(title="BrailleVision") as demo:
                 label="Upload Braille Image"
             )
             upload_out = gr.Image(type="numpy", label="Detected Braille Cells")
-        upload_conf = gr.Slider(0.05, 0.9, value=0.35, step=0.05, label="Detection Confidence")
         upload_text = gr.Textbox(label="Decoded Reading", lines=3)
         with gr.Row():
             upload_btn = gr.Button("🔍 Detect Braille", variant="primary", size="lg")
@@ -129,7 +128,7 @@ with gr.Blocks(title="BrailleVision") as demo:
 
         upload_btn.click(
             process_upload,
-            inputs=[upload_img, upload_conf],
+            inputs=[upload_img],
             outputs=[upload_out, upload_text]
         )
         upload_speak.click(speak, inputs=upload_text, outputs=upload_audio)
@@ -139,7 +138,6 @@ with gr.Blocks(title="BrailleVision") as demo:
         with gr.Row():
             cam = gr.Image(sources=["webcam"], streaming=True, type="numpy", label="Camera")
             cam_out = gr.Image(type="numpy", label="Detected Cells")
-        cam_conf = gr.Slider(0.05, 0.9, value=0.35, step=0.05, label="Detection Confidence")
         cam_text = gr.Textbox(label="Live Reading", lines=2)
         with gr.Row():
             cam_speak = gr.Button("🔊 Speak", variant="primary")
@@ -148,7 +146,7 @@ with gr.Blocks(title="BrailleVision") as demo:
 
         cam.stream(
             process_webcam,
-            inputs=[cam, cam_conf],
+            inputs=[cam],
             outputs=[cam_out, cam_text],
             stream_every=0.2,
             time_limit=600
