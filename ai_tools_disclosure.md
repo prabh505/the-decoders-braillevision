@@ -7,7 +7,7 @@
 | Tool | Purpose | What we used it for |
 |------|---------|-------------------|
 | **Claude Opus 4** | Code generation & planning | Initial project skeleton, architecture planning, code review |
-| **Google Gemini (Antigravity)** | Dataset engineering & automation | Dataset merging pipeline, Angelina bitmask converter, training scripts, documentation |
+| **Chatgpt (Codex)** | Dataset engineering & automation | Dataset merging pipeline, Angelina bitmask converter, training scripts, documentation |
 | **Roboflow** | Dataset management | Hosting and downloading labeled Braille detection images via API |
 | **Kaggle GPU** | Model training | Training 3 YOLO variants on T4 GPUs across 2 accounts |
 
