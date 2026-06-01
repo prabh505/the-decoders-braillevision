@@ -6,9 +6,13 @@ Judges (or anyone) can verify the model locally:
 
     python inference.py --source sample_inputs/test_braille.jpg --weights model/best.pt
     python inference.py --source sample_inputs/ --weights model/best.pt      # whole folder
+    python inference.py --source img.jpg --no-enhance                        # skip preprocessing
 
 For each image it prints the decoded Braille text and writes an annotated copy
 plus a .txt of the reading to the output folder (default: sample_outputs/).
+
+Preprocessing: bilateral filter (edge-preserving smoothing) + test-time augmentation (TTA)
+are enabled by default for best accuracy on real-world Braille photos.
 """
 
 import argparse
@@ -48,9 +52,20 @@ def reading_order(dets, line_tol_frac=0.6, space_mult=1.7):
     return "\n".join(out)
 
 
-def decode_image(model, names, img, conf):
-    res = model.predict(img, conf=conf, verbose=False)[0]
-    annotated = img.copy()
+def preprocess(img, bilateral_d=9, bilateral_sigma=75):
+    """Apply bilateral filter to enhance Braille dot visibility.
+    
+    Bilateral filtering smooths flat regions (paper texture/noise) while
+    preserving sharp edges (dot boundaries), making dot detection cleaner.
+    """
+    return cv2.bilateralFilter(img, bilateral_d, bilateral_sigma, bilateral_sigma)
+
+
+def decode_image(model, names, img, conf, enhance=True, augment=True):
+    # Preprocess for better detection
+    processed = preprocess(img) if enhance else img
+    res = model.predict(processed, conf=conf, verbose=False, augment=augment)[0]
+    annotated = img.copy()  # Draw boxes on original (not preprocessed) image
     dets = []
     for b in res.boxes:
         x1, y1, x2, y2 = b.xyxy[0].tolist()
@@ -68,6 +83,8 @@ def main():
     ap.add_argument("--weights", default="model/best.pt", help="path to trained weights (.pt)")
     ap.add_argument("--out", default="sample_outputs", help="output folder")
     ap.add_argument("--conf", type=float, default=0.35, help="confidence threshold")
+    ap.add_argument("--no-enhance", action="store_true", help="skip bilateral filter preprocessing")
+    ap.add_argument("--no-tta", action="store_true", help="skip test-time augmentation")
     args = ap.parse_args()
 
     if os.path.isdir(args.source):
@@ -90,7 +107,9 @@ def main():
         if img is None:
             print("Skip (unreadable):", fp)
             continue
-        text, annotated = decode_image(model, names, img, args.conf)
+        text, annotated = decode_image(model, names, img, args.conf,
+                                        enhance=not args.no_enhance,
+                                        augment=not args.no_tta)
         base = os.path.splitext(os.path.basename(fp))[0]
         out_img = os.path.join(args.out, base + "_out.jpg")
         out_txt = os.path.join(args.out, base + "_out.txt")

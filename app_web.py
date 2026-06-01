@@ -53,12 +53,16 @@ def reading_order(dets, line_tol_frac=0.6, space_mult=1.7):
     return "\n".join(out)
 
 
-def detect_and_annotate(img_rgb, conf=0.35):
-    """Run YOLO on an RGB image, return annotated image + text."""
+def detect_and_annotate(img_rgb, conf=0.35, use_tta=True):
+    """Run YOLO on an RGB image, return annotated image + text.
+    Applies bilateral filter preprocessing and optional TTA for best accuracy.
+    """
     if img_rgb is None:
         return None, ""
     bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-    res = model.predict(bgr, conf=conf, verbose=False)[0]
+    # Bilateral filter: smooths paper texture while preserving dot edges
+    enhanced = cv2.bilateralFilter(bgr, 9, 75, 75)
+    res = model.predict(enhanced, conf=conf, verbose=False, augment=use_tta)[0]
     annotated = img_rgb.copy()
     dets = []
     for b in res.boxes:
@@ -72,18 +76,18 @@ def detect_and_annotate(img_rgb, conf=0.35):
 
 
 def process_upload(img_rgb, conf):
-    """Process a single uploaded image."""
+    """Process a single uploaded image — uses TTA for best accuracy."""
     if img_rgb is None:
         return None, ""
-    annotated, text = detect_and_annotate(img_rgb, conf)
+    annotated, text = detect_and_annotate(img_rgb, conf, use_tta=True)
     return annotated, text
 
 
 def process_webcam(frame_rgb, conf):
-    """Process a webcam frame with temporal smoothing."""
+    """Process a webcam frame — skips TTA for speed, uses temporal smoothing."""
     if frame_rgb is None:
         return None, ""
-    annotated, text = detect_and_annotate(frame_rgb, conf)
+    annotated, text = detect_and_annotate(frame_rgb, conf, use_tta=False)
     _hist.append(text)
     stable = Counter(_hist).most_common(1)[0][0] if _hist else ""
     return annotated, stable
