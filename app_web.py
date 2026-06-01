@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
-BrailleVision -- live web app (Gradio). Deploy free on Hugging Face Spaces.
+BrailleVision -- Web App (Gradio)
 
-Reuses the SAME cell-classifier model + reading-order decode as app.py.
-Webcam stream -> YOLO -> annotated view + decoded text + a Speak button.
+Two modes:
+  1. Upload an image  → get annotated result + decoded text + speak
+  2. Live webcam stream → real-time detection + decoded text + speak
 
-Opening the Space URL on a PHONE uses the phone camera -> instant "mobile app"
-experience, with the phone's better close-up camera for Braille.
-
-Deploy on Hugging Face Spaces:
-  1. New Space -> SDK = Gradio, hardware = CPU (free; fine for a nano model)
-  2. Upload:  this file renamed to  app.py  ,  requirements.txt  ,  best.pt
-  3. It builds and goes live at https://huggingface.co/spaces/<you>/<name>
-Local quick test:  python app_web.py   (or demo.launch(share=True) for a temp public link)
+Run:
+    python app_web.py
+    # Opens at http://localhost:7860
 """
 
 import os
@@ -25,10 +21,10 @@ import gradio as gr
 from ultralytics import YOLO
 from gtts import gTTS
 
-MODEL_PATH = os.environ.get("MODEL_PATH", "best.pt")
+MODEL_PATH = os.environ.get("MODEL_PATH", "model/best.pt")
 model = YOLO(MODEL_PATH)
 names = model.names
-_hist = deque(maxlen=5)          # simple temporal smoothing (single-user demo)
+_hist = deque(maxlen=5)
 
 
 def reading_order(dets, line_tol_frac=0.6, space_mult=1.7):
@@ -57,13 +53,13 @@ def reading_order(dets, line_tol_frac=0.6, space_mult=1.7):
     return "\n".join(out)
 
 
-def process(frame_rgb, conf):
-    """Runs on each streamed webcam frame. Returns annotated image + reading."""
-    if frame_rgb is None:
+def detect_and_annotate(img_rgb, conf=0.35):
+    """Run YOLO on an RGB image, return annotated image + text."""
+    if img_rgb is None:
         return None, ""
-    bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)        # ultralytics expects BGR
+    bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     res = model.predict(bgr, conf=conf, verbose=False)[0]
-    annotated = frame_rgb.copy()
+    annotated = img_rgb.copy()
     dets = []
     for b in res.boxes:
         x1, y1, x2, y2 = b.xyxy[0].tolist()
@@ -72,13 +68,29 @@ def process(frame_rgb, conf):
         cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), (0, 230, 0), 2)
         cv2.putText(annotated, label, (int(x1), int(y1) - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 230, 0), 2)
-    _hist.append(reading_order(dets))
+    return annotated, reading_order(dets)
+
+
+def process_upload(img_rgb, conf):
+    """Process a single uploaded image."""
+    if img_rgb is None:
+        return None, ""
+    annotated, text = detect_and_annotate(img_rgb, conf)
+    return annotated, text
+
+
+def process_webcam(frame_rgb, conf):
+    """Process a webcam frame with temporal smoothing."""
+    if frame_rgb is None:
+        return None, ""
+    annotated, text = detect_and_annotate(frame_rgb, conf)
+    _hist.append(text)
     stable = Counter(_hist).most_common(1)[0][0] if _hist else ""
     return annotated, stable
 
 
 def speak(text):
-    """Turn the current reading into speech (gTTS) for the audio player."""
+    """Turn the current reading into speech via gTTS."""
     if not text or not text.strip():
         return None
     f = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
@@ -86,26 +98,65 @@ def speak(text):
     return f.name
 
 
-with gr.Blocks(title="BrailleVision", theme=gr.themes.Soft()) as demo:
+# ---- Build the UI ----
+with gr.Blocks(title="BrailleVision") as demo:
     gr.Markdown(
         "# 👁️ BrailleVision\n"
-        "Point your camera at embossed Braille under good side-lighting. "
-        "The reading appears below — tap **Speak** to hear it."
+        "Detect and read Braille from images or live camera. "
+        "**93% accuracy** across 26 letter classes (a–z).\n\n"
+        "*Team: The Decoders*"
     )
-    with gr.Row():
-        cam = gr.Image(sources=["webcam"], streaming=True, type="numpy", label="Camera")
-        out_img = gr.Image(type="numpy", label="Detected cells")
-    conf = gr.Slider(0.05, 0.9, value=0.35, step=0.05, label="Detection confidence")
-    text = gr.Textbox(label="Reading", lines=2, show_copy_button=True)
-    with gr.Row():
-        speak_btn = gr.Button("🔊 Speak", variant="primary")
-        clear_btn = gr.Button("Clear")
-    audio = gr.Audio(label="Speech", autoplay=True)
 
-    cam.stream(process, inputs=[cam, conf], outputs=[out_img, text],
-               stream_every=0.2, time_limit=600)
-    speak_btn.click(speak, inputs=text, outputs=audio)
-    clear_btn.click(lambda: (_hist.clear(), "")[1], outputs=text)
+    with gr.Tab("📤 Upload Image"):
+        gr.Markdown("Upload a photo of Braille text to detect and decode it.")
+        with gr.Row():
+            upload_img = gr.Image(
+                sources=["upload", "clipboard"],
+                type="numpy",
+                label="Upload Braille Image"
+            )
+            upload_out = gr.Image(type="numpy", label="Detected Braille Cells")
+        upload_conf = gr.Slider(0.05, 0.9, value=0.35, step=0.05, label="Detection Confidence")
+        upload_text = gr.Textbox(label="Decoded Reading", lines=3)
+        with gr.Row():
+            upload_btn = gr.Button("🔍 Detect Braille", variant="primary", size="lg")
+            upload_speak = gr.Button("🔊 Speak", size="lg")
+        upload_audio = gr.Audio(label="Speech", autoplay=True)
+
+        upload_btn.click(
+            process_upload,
+            inputs=[upload_img, upload_conf],
+            outputs=[upload_out, upload_text]
+        )
+        upload_speak.click(speak, inputs=upload_text, outputs=upload_audio)
+
+    with gr.Tab("📷 Live Camera"):
+        gr.Markdown("Point your camera at Braille text for real-time detection.")
+        with gr.Row():
+            cam = gr.Image(sources=["webcam"], streaming=True, type="numpy", label="Camera")
+            cam_out = gr.Image(type="numpy", label="Detected Cells")
+        cam_conf = gr.Slider(0.05, 0.9, value=0.35, step=0.05, label="Detection Confidence")
+        cam_text = gr.Textbox(label="Live Reading", lines=2)
+        with gr.Row():
+            cam_speak = gr.Button("🔊 Speak", variant="primary")
+            cam_clear = gr.Button("Clear")
+        cam_audio = gr.Audio(label="Speech", autoplay=True)
+
+        cam.stream(
+            process_webcam,
+            inputs=[cam, cam_conf],
+            outputs=[cam_out, cam_text],
+            stream_every=0.2,
+            time_limit=600
+        )
+        cam_speak.click(speak, inputs=cam_text, outputs=cam_audio)
+        cam_clear.click(lambda: (_hist.clear(), "")[1], outputs=cam_text)
+
+    gr.Markdown(
+        "---\n"
+        "**Model:** YOLOv8s • **mAP@50:** 93.15% • **Classes:** 26 (a–z) • "
+        "[GitHub](https://github.com/prabh505/the-decoders-braillevision)"
+    )
 
 if __name__ == "__main__":
     demo.launch()
