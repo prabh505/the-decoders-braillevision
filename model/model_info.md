@@ -1,40 +1,37 @@
-# Model Info
+# Model Information
 
-## Architecture
-- **Family:** Ultralytics YOLO (object detection).
-- **Variant:** `yolo26n` (Account A, fine-tuned) / `yolo26s` (Account B). Shipped model: `<A or B>`.
-- **Task:** detect each Braille cell and classify it as a letter.
-- **Input size:** 640 × 640.
-- **Classes (<N>):** A–Z  `<list exactly as in dataset/data.yaml>`.
+## Deployed Model: Model B (YOLOv8s)
+- **File:** `best.pt` (21MB)
+- **Architecture:** YOLOv8s (small, 11.2M parameters)
+- **Input:** 640×640 RGB
+- **Classes:** 26 (a-z English Braille letters)
+- **Training:** 150 epochs, AdamW optimizer, heavy augmentation
+- **Dataset:** 1,614 images / 90,469 bounding boxes (merged from Roboflow + Angelina)
 
-## Files
-| File | Format | Use |
-|------|--------|-----|
-| `model/best.pt`     | PyTorch | local inference / evaluation (inference.py, evaluate.py) |
-| `model/best.tflite` | TFLite (int8) | on-device Android app |
-
-## Training summary
-- **Base / warm-start:** `<yolo26n.pt / existing prototype weights>`
-- **Dataset:** Roboflow `yapayzeka/braille-detection-vxtp1` + own captures (see `dataset/dataset_info.md`)
-- **Command:** `training/train_kaggle.py` on Kaggle GPU (P100 / T4)
-- **Hyperparameters:** imgsz=640, epochs=`<80/120>`, batch=16, optimizer=auto, patience=25
-- **Augmentation (B):** degrees=8, translate=0.1, scale=0.5, shear=2, perspective=0.0005, hsv_v=0.5, mosaic=1.0, mixup=0.1
-- **Hardware:** Kaggle GPU; **Trained during the hackathon window** (see commit history + `training/training_logs/`)
-
-## Metrics (held-out test set)
+### Metrics
 | Metric | Value |
 |--------|-------|
-| mAP50      | `<0.XX>` |
-| mAP50-95   | `<0.XX>` |
-| exact-match (string) | `<XX%>` |
-| mean CER   | `<0.XX>` |
+| mAP@50 | 93.15% |
+| mAP@50-95 | 72.36% |
+| Precision | 95.72% |
+| Recall | 90.85% |
 
-Training curves and confusion matrix: `training/results/results.png`, `training/results/confusion_matrix.png`.
+## All Models Compared
 
-## Load & run
-```python
-from ultralytics import YOLO
-m = YOLO("model/best.pt")
-print(m.names)                 # class names
-m.predict("sample_inputs/test_braille.jpg", conf=0.35)
+| Model | Architecture | mAP@50 | Size | File |
+|-------|-------------|--------|------|------|
+| A (DotNeuralNet transfer) | YOLOv8 + pretrained braille backbone | 92.88% | 50MB | best_A.pt |
+| **B (Primary)** | **YOLOv8s** | **93.15%** | **21MB** | **best.pt** |
+| C (Latest gen) | YOLOv11n | 89.29% | 5.2MB | best_C.pt |
+
+## Usage
+```bash
+python inference.py --source image.jpg --weights model/best.pt
+python app.py --weights model/best.pt        # live webcam
+python app_web.py                             # web browser
 ```
+
+## Training Reproduction
+See `training/train_kaggle.py` for Model A/B and `training/train_kaggle_v11.py` for Model C.
+
+Upload `braille_merged.zip` to Kaggle, paste the script, and run on GPU T4.

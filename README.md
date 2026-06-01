@@ -1,127 +1,164 @@
-# BrailleVision 👁️ — Real-Time Physical Braille → Text & Speech
+# BrailleVision 👁️ — Real-Time Braille → Text & Speech
 
-Reads **real embossed Braille** from a camera and converts it to English **text and speech**, fully **on-device / offline**. Built with a fine-tuned **YOLO** cell detector + a deterministic reading-order decoder. Ships as an **Android APK** (on-device) and a **Python CLI / web app** for local verification.
+**Team: The Decoders** | Built during BrailleVision Hackathon 2026
 
-- 🎥 **Demo video:** `<YOUR VIDEO LINK>`
-- 📱 **Android APK:** `<YOUR GITHUB RELEASE LINK>`
-- 🌐 **Live web demo (optional):** `<YOUR HF SPACE LINK>`
+Reads **real embossed Braille** from camera images and converts it to English **text and speech**. Uses fine-tuned **YOLO object detection** to identify individual Braille cells, then reconstructs readable text using a deterministic reading-order algorithm.
+
+> **93.15% mAP@50** accuracy across 26 Braille letter classes (a–z), trained on **1,614 images / 90,469 bounding boxes** merged from multiple datasets.
 
 ---
 
-## ✅ Verify locally in 3 commands (for judges)
+## ✅ Quick Verify (for Judges)
 
 ```bash
-git clone <YOUR REPO URL> && cd <repo>
+git clone https://github.com/prabh505/the-decoders-braillevision.git && cd the-decoders-braillevision
 pip install -r requirements.txt
-python inference.py --source sample_inputs/test_braille.jpg --weights model/best.pt
+python inference.py --source sample_inputs/ --weights model/best.pt
 ```
 
-This prints the decoded Braille text and writes an annotated image + `.txt` to `sample_outputs/`. Run on a folder with `--source sample_inputs/`. The trained weights (`model/best.pt`) are committed in this repo, so **no extra access is needed** to verify the model.
+This detects Braille letters in all sample images, prints decoded text, and saves annotated images to `sample_outputs/`.
 
 ---
 
-## What it does / approach
+## 🎯 What It Handles
 
-1. **Capture** under oblique side-lighting so the colorless dots cast shadows.
-2. **Detect** each Braille cell with a YOLO model that classifies it as a letter.
-3. **Decode** detections into text (sort left→right, group lines by row, gaps→spaces).
-4. **Speak** the result (offline TTS).
-
-Decode is deterministic (no contractions / Grade-1), keeping the system robust and debuggable.
-
-## Tech stack
-- **Model:** Ultralytics YOLO (YOLO26-n / -s), trained on Roboflow + own captures, exported to **`.pt`** and **`.tflite`**.
-- **Inference:** Python (`ultralytics`, OpenCV, NumPy); Flutter `ultralytics_yolo` on Android.
-- **Speech:** `flutter_tts` (mobile), macOS `say` / `pyttsx3` (desktop), `gTTS` (web).
-- **Model type:** YOLO (object detection) + rule-based decoder = **Hybrid**.
+| Input Type | Supported | How |
+|-----------|-----------|-----|
+| Real embossed Braille from paper | ✅ | Trained on 212 printed book photos |
+| Handwritten Braille (slate & stylus) | ✅ | Trained on 28 handwritten student samples |
+| Braille writer output | ✅ | Machine-embossed detected same as printed |
+| Camera-captured images | ✅ | `inference.py` — any photo |
+| Live camera scanning | ✅ | `app.py` — real-time webcam with TTS |
 
 ---
 
-## Repository structure
+## 🏗️ How It Works
+
 ```
-<team-name>-braillevision/
-├── README.md                 ← this file
-├── requirements.txt
-├── setup_instructions.md
-├── inference.py              ← local verification entry point
-├── evaluate.py               ← held-out metrics (exact-match, CER)
-├── app.py                    ← desktop live webcam demo
-├── app_web.py                ← web-app fallback (Gradio)
+Camera Image → YOLO Detection → Bounding Boxes + Letters → Reading Order → Text → Speech
+```
+
+1. **Capture** — photograph Braille under oblique side-lighting (dots cast shadows)
+2. **Detect** — YOLOv8s identifies each Braille cell and classifies it as a letter (a–z)
+3. **Decode** — reading-order algorithm sorts detections into lines (left→right, top→bottom), inserts spaces at gaps
+4. **Speak** — text-to-speech output (macOS `say`, gTTS for web)
+
+---
+
+## 📊 Model Performance
+
+We trained and compared **3 models** with different strategies:
+
+| Model | Architecture | mAP@50 | Precision | Recall | Size | Strategy |
+|-------|-------------|--------|-----------|--------|------|----------|
+| A | YOLOv8 + DotNeuralNet transfer | 92.88% | **97.14%** | 91.50% | 50MB | Braille-pretrained backbone |
+| **B (Primary)** | **YOLOv8s** | **93.15%** | 95.72% | 90.85% | **21MB** | Best overall accuracy |
+| C | YOLOv11n | 89.29% | 89.70% | 86.73% | **5.2MB** | Smallest — for mobile/edge |
+
+**Model B** is deployed as `best.pt` — best mAP@50 at a practical 21MB size.
+
+See [docs/model_journey.md](docs/model_journey.md) for the full development story.
+
+---
+
+## 📦 Dataset Engineering
+
+We merged multiple sources to create a diverse training set:
+
+| Source | Images | Boxes | Type |
+|--------|--------|-------|------|
+| [yapayzeka/braille-detection](https://universe.roboflow.com/yapayzeka/braille-detection-vxtp1) (Roboflow) | 1,324 | ~21K | Mixed braille |
+| [Angelina Braille Images](https://github.com/IlyaOvodov/AngelinaDataset) (GitHub) | 290 | ~69K | Real books + handwritten |
+| **Total** | **1,614** | **90,469** | Printed + handwritten + camera |
+
+**Key challenge**: Angelina uses bitmask-encoded labels (integer → dot pattern → letter). We built a custom converter (`converters/angelina_to_yolo.py`) to decode these into standard YOLO format.
+
+---
+
+## 🗂️ Repository Structure
+
+```
+the-decoders-braillevision/
+├── README.md                     ← this file
+├── requirements.txt              ← pip dependencies
+├── inference.py                  ← offline image inference
+├── app.py                        ← live webcam demo (OpenCV + TTS)
+├── app_web.py                    ← web app (Gradio, works on phone)
+├── evaluate.py                   ← validation metrics
+├── merge_datasets.py             ← multi-source dataset merger
+├── converters/
+│   └── angelina_to_yolo.py       ← Angelina bitmask → YOLO converter
 ├── model/
-│   ├── best.pt               ← trained weights (committed; ~6–12 MB)
-│   ├── best.tflite           ← mobile export
-│   └── model_info.md
+│   ├── best.pt                   ← primary weights (Model B, 21MB)
+│   ├── best_A.pt                 ← Model A weights (50MB)
+│   ├── best_C.pt                 ← Model C weights (5.2MB)
+│   └── model_info.md             ← architecture & metrics detail
 ├── training/
-│   ├── train_kaggle.py       ← training + TFLite export (Kaggle)
-│   ├── training_logs/        ← screenshots / logs
-│   └── results/              ← results.png, confusion_matrix.png
+│   ├── train_kaggle.py           ← Kaggle notebook (Model A & B)
+│   └── train_kaggle_v11.py       ← Kaggle notebook (Model C)
+├── sample_inputs/                ← test Braille images
+├── sample_outputs/               ← inference results
+├── docs/
+│   ├── model_journey.md          ← full development story
+│   ├── results_A.png             ← Model A training curves
+│   ├── results_B.png             ← Model B training curves
+│   └── results_C.png             ← Model C training curves
 ├── dataset/
-│   ├── data.yaml
-│   ├── sample_images/
-│   ├── sample_annotations/
-│   └── dataset_info.md
-├── sample_inputs/            ← real Braille photos for testing
-├── sample_outputs/           ← inference.py writes here
-├── flutter_app/              ← Android app (see FLUTTER_APK_SETUP.md)
-├── demo/
-│   ├── demo_video_link.txt
-│   └── screenshots/
+│   └── dataset_info.md           ← dataset details
+├── flutter_app/                  ← Android app (stretch goal)
 ├── ai_tools_disclosure.md
-└── LICENSE                   ← AGPL-3.0
+└── LICENSE                       ← AGPL-3.0
 ```
 
 ---
 
-## Dataset
-- **Source:** Roboflow Universe "Braille Detection" (`yapayzeka/braille-detection-vxtp1`) + our own captured photos.
-- **Format:** YOLO (`images/` + `labels/` txt boxes), classes = A–Z.
-- Full details, counts, splits, preprocessing, and samples: **[`dataset/dataset_info.md`](dataset/dataset_info.md)**.
-- `dataset/data.yaml` is included; full dataset link: `<DATASET DOWNLOAD LINK>`.
+## 🚀 Usage
 
-## Model & weights
-- `model/best.pt` (committed) and `model/best.tflite` (mobile).
-- Architecture, input size, classes, and metrics: **[`model/model_info.md`](model/model_info.md)**.
-
-## Training (reproducible)
-- Script: `training/train_kaggle.py` (run on Kaggle GPU). Command, hyperparameters, epochs, and logs are documented in `model/model_info.md` and `training/`.
-- Re-validate any weights: `python evaluate.py model/best.pt` (expects `test/labels.csv`).
-
-## Evaluation (held-out, our capture rig)
-| Model | exact-match | mean CER | mAP50 | FPS (device) |
-|------|------|------|------|------|
-| A (fine-tuned) | `<XX%>` | `<0.XX>` | `<0.XX>` | `<XX>` |
-| B (yolo26s)    | `<XX%>` | `<0.XX>` | `<0.XX>` | `<XX>` |
-
-Reproduce with `evaluate.py`. Training curves / confusion matrix in `training/results/`.
-
----
-
-## 📱 Android APK
-Install the prebuilt APK from the release above, or build it: see **`FLUTTER_APK_SETUP.md`**. Runs the `.tflite` model on-device with the phone camera, fully offline.
-
-## 🌐 Web app (optional fallback)
+### Offline inference (any image/folder)
 ```bash
-python app_web.py      # local; or deploy app_web.py to a Hugging Face Space
+python inference.py --source sample_inputs/braille_book_page.jpg --weights model/best.pt
+python inference.py --source sample_inputs/ --weights model/best.pt    # whole folder
 ```
 
-## 🖥️ Desktop live demo
+### Live webcam demo
 ```bash
-python app.py --weights model/best.pt        # q quit · s speak · space pause
+python app.py --weights model/best.pt
+# Keys: q=quit  s=speak  space=pause
+```
+
+### Web app (works on phone browser too)
+```bash
+python app_web.py
+# Opens at http://localhost:7860 — point phone camera at Braille
 ```
 
 ---
 
-## Model verification access
-The trained model is **committed directly** (`model/best.pt`, `model/best.tflite`) — judges can load and run it immediately with `inference.py`. No private access required. Contact for live verification: `<PHONE / EMAIL>`.
+## 🔧 Tech Stack
 
-## AI tools used
-Disclosed in **[`ai_tools_disclosure.md`](ai_tools_disclosure.md)**.
+- **Detection**: Ultralytics YOLOv8/v11, OpenCV
+- **Training**: Kaggle T4 GPU, AdamW optimizer, mosaic augmentation
+- **Dataset**: Roboflow API, custom Angelina bitmask converter, MD5 deduplication
+- **Application**: Python, Gradio (web), OpenCV (desktop), gTTS/macOS TTS (speech)
+- **Transfer Learning**: DotNeuralNet pretrained braille backbone (64-class → 26-class)
 
-## Hackathon timeline
-Developed during BrailleVision Hackathon 2026. The git commit history reflects incremental progress across the official window.
+---
 
-## Limitations
-Grade-1 (uncontracted) Braille; single-sided pages; best under even oblique lighting (tuned to our capture rig).
+## 🙏 Acknowledgments
 
-## License
-AGPL-3.0 (Ultralytics YOLO + the Flutter plugin are AGPL-3.0). See `LICENSE`.
+| Resource | Author | Usage |
+|----------|--------|-------|
+| [Angelina Braille Dataset](https://github.com/IlyaOvodov/AngelinaDataset) | Ilya Ovodov | 290 real-world Braille photos |
+| [DotNeuralNet](https://github.com/snoop2head/DotNeuralNet) | snoop2head | Pretrained YOLOv8 braille backbone |
+| [yapayzeka/braille-detection](https://universe.roboflow.com/yapayzeka/braille-detection-vxtp1) | yapayzeka | 1,324 labeled detection images |
+| [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) | Ultralytics | Detection framework |
+
+---
+
+## 📜 License
+
+AGPL-3.0 — See [LICENSE](LICENSE).
+
+---
+
+*Built in 12 hours by The Decoders. Three models. One mission: make Braille readable by AI.* 🦾

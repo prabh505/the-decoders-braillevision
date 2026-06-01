@@ -110,14 +110,43 @@ This pretrained model file (`dotneural_pretrained.pt`, 50MB) is bundled with our
 
 ---
 
+### 🟡 Model C — "The Latest Generation" (YOLOv11n)
+
+| Setting | Value |
+|---------|-------|
+| Architecture | YOLOv11n (latest gen nano, 2.6M params) |
+| Dataset | Same merged dataset |
+| Epochs | 120 |
+| Augmentation | Medium (7° rotation, mosaic, light mixup) |
+| Strategy | Smallest possible model for mobile/edge deployment |
+
+**Results**:
+```
+mAP@50:    89.29%
+mAP@50-95: 66.92%
+Precision: 89.70%
+Recall:    86.73%
+Model size: 5.2MB
+```
+
+**Verdict**: 4× smaller than Model B with only 4% accuracy drop. Perfect for mobile deployment where model size matters.
+
+---
+
 ## Chapter 4: Architecture Decision
+
+| Model | Expected mAP50 | Size | Speed | Best for |
+|-------|---------------|------|-------|----------|
+| A (DotNeuralNet transfer) | 92.88% | 50MB | Fast | Highest precision |
+| B (YOLOv8s) | 93.15% | 21MB | Medium | Best overall |
+| C (YOLOv11n) | 89.29% | 5.2MB | Fastest | Mobile/edge |
 
 ```
                 DATA ENGINEERING                    MODEL TRAINING
   ┌─────────────────────────────┐    ┌──────────────────────────────┐
   │ Roboflow (1,324)            │    │ Model A: nano + mild aug     │
   │ + Angelina (290, 69K boxes) │───►│ Model B: small + heavy aug   │
-  │ = 1,614 images / 90K boxes  │    │ Model C: DotNeuralNet warmup │
+  │ = 1,614 images / 90K boxes  │    │ Model C: YOLOv11n mobile     │
   └─────────────────────────────┘    └─────────────┬────────────────┘
                                                    │
                                      ┌─────────────▼────────────────┐

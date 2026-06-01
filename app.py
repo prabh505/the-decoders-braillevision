@@ -11,9 +11,8 @@ primary path. The dot-detector path needs grid reconstruction (grid.py) and is
 a stretch goal only.
 
 Run:
-    python app.py --weights models/best.pt
-    python app.py --weights models/best.mlpackage      # CoreML export (faster on M2)
-    python app.py --weights models/best.pt --clahe      # if your rig images need contrast
+    python app.py --weights model/best.pt
+    python app.py --weights model/best.pt --clahe      # if your rig images need contrast
 
 Keys:  q = quit | s = speak current reading | space = pause/resume detection
 
@@ -130,7 +129,7 @@ def reading_order(dets, line_tol_frac=0.6, space_mult=1.7):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--weights", default="models/best.pt")
+    ap.add_argument("--weights", default="model/best.pt")
     ap.add_argument("--cam", type=int, default=0, help="camera index (try 1 if 0 is wrong)")
     ap.add_argument("--conf", type=float, default=0.35)
     ap.add_argument("--vote", type=int, default=5, help="frames of temporal voting")
