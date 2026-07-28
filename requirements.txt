@@ -1,7 +1,6 @@
-ultralytics==8.4.57
-torch==2.12.0
-torchvision==0.17.0
-# Use the headless version of OpenCV for Linux servers!
+ultralytics
+torch
+torchvision
 opencv-python-headless
 numpy
 flask
