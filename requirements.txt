@@ -1,20 +1,9 @@
-# ── BrailleVision: Python dependencies ──────────────────────────────────────
-# Judges: `pip install -r requirements.txt` then run inference.py (see README).
-
-# Core: inference, evaluation, local training (inference.py, evaluate.py)
-ultralytics>=8.3.0
-opencv-python>=4.8.0
-numpy>=1.24
-
-# Web-app fallback (app_web.py)
-gradio>=5.0.0
-gtts>=2.5.0
-
-# Desktop live demo (app.py) — TTS on non-macOS only (macOS uses built-in `say`)
-pyttsx3>=2.90 ; sys_platform != "darwin"
-
-# Optional: only needed if re-running the Roboflow dataset download in train_kaggle.py
-# roboflow>=1.1.0
-
-# Tip: once everything runs, lock exact versions with:  pip freeze > requirements.txt
+ultralytics==8.4.57
+torch==2.12.0
+torchvision==0.17.0
+# Use the headless version of OpenCV for Linux servers!
+opencv-python-headless
+numpy
 flask
+gradio
+gunicorn
